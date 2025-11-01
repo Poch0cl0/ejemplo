@@ -12,3 +12,5 @@ public class VulnerableDeserializer {
         System.out.println("Objeto deserializado: " + obj);
     }
 }
+
+zzzzzzzzzzzz
