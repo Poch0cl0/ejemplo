@@ -1,50 +1,33 @@
+import os
 import sqlite3
+import shlex
+import subprocess
 
-# ⚠️ Contraseña hardcodeada (mala práctica)
-DB_PASSWORD = "123456"
-
-def connect_to_db():
-    """Conexión insegura a la base de datos."""
-    # ❌ Ruta fija sin variables de entorno
-    conn = sqlite3.connect("users.db")
-    return conn
-
-def register_user(username, password):
-    """Registra un usuario (inseguro)."""
-    conn = connect_to_db()
+def login(username, password):
+    # ✅ Consulta segura con parámetros
+    conn = sqlite3.connect("app.db")
     cursor = conn.cursor()
-
-    # ❌ No hay validación de datos
-    # ❌ Contraseña guardada en texto plano
-    query = f"INSERT INTO users (username, password) VALUES ('{username}', '{password}')"
-    cursor.execute("CREATE TABLE IF NOT EXISTS users (username TEXT, password TEXT)")
-    cursor.execute(query)
-
-    conn.commit()
+    cursor.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+    user = cursor.fetchone()
     conn.close()
-    print(f"Usuario {username} registrado exitosamente.")
 
-def authenticate_user(username, password):
-    """Autentica usuario de forma insegura."""
-    conn = connect_to_db()
-    cursor = conn.cursor()
-
-    # ⚠️ Vulnerable a inyección SQL
-    query = f"SELECT * FROM users WHERE username = '{username}' AND password = '{password}'"
-    cursor.execute(query)
-
-    result = cursor.fetchone()
-    if result:
-        print("Autenticación exitosa.")
+    if user:
+        print("Login exitoso!")
     else:
         print("Credenciales inválidas.")
 
-    conn.close()
+def run_command():
+    # ✅ Validación y ejecución segura del comando
+    cmd = input("Ingresa un comando permitido (ls, whoami, date): ").strip()
+    allowed_cmds = {"ls", "whoami", "date"}
+    if cmd in allowed_cmds:
+        # Separa los argumentos y ejecuta sin shell
+        subprocess.run(shlex.split(cmd), check=True)
+    else:
+        print("Comando no permitido.")
 
 if __name__ == "__main__":
-    # Ejemplo de uso inseguro
-    user = input("Ingrese usuario: ")
-    pwd = input("Ingrese contraseña: ")
-
-    register_user(user, pwd)
-    authenticate_user(user, pwd)
+    u = input("Usuario: ")
+    p = input("Contraseña: ")
+    login(u, p)
+    run_command()
