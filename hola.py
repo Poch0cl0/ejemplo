@@ -1,20 +1,34 @@
-def safe_sum(a, b):
+import os
+
+def safe_read_file(filename):
     """
-    Calcula la suma de dos números de forma segura.
-    - Valida los tipos de entrada.
-    - Evita conversiones automáticas o ejecución de código no confiable.
+    Lee un archivo de texto de forma segura.
+    - Solo permite archivos dentro del directorio actual.
+    - Evita rutas peligrosas o archivos binarios.
     """
-    if not isinstance(a, (int, float)) or not isinstance(b, (int, float)):
-        raise TypeError("Ambos argumentos deben ser numéricos (int o float).")
-    return a + b
+    base_dir = os.getcwd()
+    file_path = os.path.abspath(os.path.join(base_dir, filename))
+
+    # Evita acceder fuera del directorio permitido
+    if not file_path.startswith(base_dir):
+        raise PermissionError("Acceso denegado: ruta no permitida.")
+
+    # Verifica extensión segura
+    if not filename.lower().endswith(".txt"):
+        raise ValueError("Solo se permiten archivos .txt")
+
+    with open(file_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 
 if __name__ == "__main__":
     try:
-        a = float(input("Ingrese el primer número: "))
-        b = float(input("Ingrese el segundo número: "))
-        print("Resultado seguro:", safe_sum(a, b))
-    except ValueError:
-        print("⚠️ Error: Debe ingresar solo números válidos.")
-    except TypeError as e:
-        print("⚠️", e)
+        name = input("Ingrese el nombre del archivo .txt: ").strip()
+        print("\nContenido del archivo:\n")
+        print(safe_read_file(name))
+    except FileNotFoundError:
+        print("⚠️ Archivo no encontrado.")
+    except (PermissionError, ValueError) as e:
+        print(f"⚠️ {e}")
+    except Exception as e:
+        print(f"⚠️ Error inesperado: {e}")
