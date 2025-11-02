@@ -1,34 +1,75 @@
+#!/usr/bin/env python3
+"""
+NotasSeguras - ejemplo seguro (CLI) para registrar usuarios y guardar notas.
+
+Buenas prácticas incluidas:
+- Hash de contraseñas con PBKDF2-HMAC-SHA256 + salt por usuario.
+- Parámetros en consultas SQLite (no concatenación de strings).
+- Validación de entradas (usuario y contraseña).
+- Uso de context managers para recursos.
+- Comparación en tiempo constante para hashes.
+- Logging en lugar de prints para eventos importantes.
+- Tipado y docstrings.
+"""
+
+from __future__ import annotations
+import argparse
+import sqlite3
 import os
+import re
+import hmac
+import hashlib
+import logging
+from typing import Optional, Iterable, Tuple
 
-def safe_read_file(filename):
+# Configuración de logging (no exponer información sensible)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+DB_PATH = "notasseguras.db"
+PBKDF2_ITERATIONS = 200_000  # suficientemente alto para dificultad computacional
+SALT_BYTES = 16
+HASH_LEN = 32  # 256 bits
+
+
+# ---------- Utilidades criptográficas seguras ----------
+
+def generate_salt() -> bytes:
+    """Genera un salt criptográficamente seguro."""
+    return os.urandom(SALT_BYTES)
+
+
+def hash_password(password: str, salt: bytes, iterations: int = PBKDF2_ITERATIONS) -> bytes:
     """
-    Lee un archivo de texto de forma segura.
-    - Solo permite archivos dentro del directorio actual.
-    - Evita rutas peligrosas o archivos binarios.
+    Deriva una clave segura desde la contraseña usando PBKDF2-HMAC-SHA256.
+    Devuelve bytes (el hash).
     """
-    base_dir = os.getcwd()
-    file_path = os.path.abspath(os.path.join(base_dir, filename))
-
-    # Evita acceder fuera del directorio permitido
-    if not file_path.startswith(base_dir):
-        raise PermissionError("Acceso denegado: ruta no permitida.")
-
-    # Verifica extensión segura
-    if not filename.lower().endswith(".txt"):
-        raise ValueError("Solo se permiten archivos .txt")
-
-    with open(file_path, "r", encoding="utf-8") as f:
-        return f.read()
+    if not isinstance(password, str):
+        raise TypeError("password debe ser str")
+    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations, dklen=HASH_LEN)
 
 
-if __name__ == "__main__":
-    try:
-        name = input("Ingrese el nombre del archivo .txt: ").strip()
-        print("\nContenido del archivo:\n")
-        print(safe_read_file(name))
-    except FileNotFoundError:
-        print("⚠️ Archivo no encontrado.")
-    except (PermissionError, ValueError) as e:
-        print(f"⚠️ {e}")
-    except Exception as e:
-        print(f"⚠️ Error inesperado: {e}")
+def verify_password(password: str, salt: bytes, expected_hash: bytes, iterations: int = PBKDF2_ITERATIONS) -> bool:
+    """Verifica la contraseña usando comparación en tiempo constante."""
+    candidate = hash_password(password, salt, iterations)
+    return hmac.compare_digest(candidate, expected_hash)
+
+
+# ---------- Validaciones ----------
+
+USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{3,30}$")  # permitir solo caracteres seguros, longitud razonable
+MIN_PASSWORD_LEN = 8
+
+
+def validate_username(username: str) -> None:
+    if not USERNAME_RE.match(username):
+        raise ValueError("Usuario inválido. Solo letras, números, ., _ y -; longitud 3-30.")
+
+
+def validate_password(password: str) -> None:
+    if len(password) < MIN_PASSWORD_LEN:
+        raise ValueError(f"Contraseña muy corta. Mínimo {MIN_PASSWORD_LEN} caracteres.")
+
+
+# ---------- Base de datos ----------
+
+def get_connection(path: str =
