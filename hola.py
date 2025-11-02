@@ -1,75 +1,88 @@
-#!/usr/bin/env python3
-"""
-NotasSeguras - ejemplo seguro (CLI) para registrar usuarios y guardar notas.
-
-Buenas prácticas incluidas:
-- Hash de contraseñas con PBKDF2-HMAC-SHA256 + salt por usuario.
-- Parámetros en consultas SQLite (no concatenación de strings).
-- Validación de entradas (usuario y contraseña).
-- Uso de context managers para recursos.
-- Comparación en tiempo constante para hashes.
-- Logging en lugar de prints para eventos importantes.
-- Tipado y docstrings.
-"""
-
-from __future__ import annotations
-import argparse
-import sqlite3
 import os
-import re
-import hmac
-import hashlib
-import logging
-from typing import Optional, Iterable, Tuple
+import pickle
+import sqlite3
+from flask import Flask, request, render_template_string
 
-# Configuración de logging (no exponer información sensible)
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+app = Flask(__name__)
 
-DB_PATH = "notasseguras.db"
-PBKDF2_ITERATIONS = 200_000  # suficientemente alto para dificultad computacional
-SALT_BYTES = 16
-HASH_LEN = 32  # 256 bits
+# Vulnerabilidad 1: Clave secreta hardcodeada
+SECRET_KEY = "mi_clave_super_secreta_123"
+API_KEY = "sk-1234567890abcdef"
 
+# Vulnerabilidad 2: SQL Injection
+def buscar_usuario(username):
+    conn = sqlite3.connect('usuarios.db')
+    cursor = conn.cursor()
+    # Concatenación directa de strings - SQL Injection
+    query = f"SELECT * FROM usuarios WHERE username = '{username}'"
+    cursor.execute(query)
+    resultado = cursor.fetchall()
+    conn.close()
+    return resultado
 
-# ---------- Utilidades criptográficas seguras ----------
+# Vulnerabilidad 3: Command Injection
+def procesar_archivo(filename):
+    # Ejecución de comandos del sistema sin validación
+    os.system(f"cat {filename}")
+    return "Archivo procesado"
 
-def generate_salt() -> bytes:
-    """Genera un salt criptográficamente seguro."""
-    return os.urandom(SALT_BYTES)
+# Vulnerabilidad 4: Insecure Deserialization
+def cargar_datos(data):
+    # Pickle puede ejecutar código arbitrario
+    obj = pickle.loads(data)
+    return obj
 
+# Vulnerabilidad 5: Path Traversal
+@app.route('/leer_archivo')
+def leer_archivo():
+    archivo = request.args.get('archivo')
+    # Sin validación del path
+    with open(archivo, 'r') as f:
+        contenido = f.read()
+    return contenido
 
-def hash_password(password: str, salt: bytes, iterations: int = PBKDF2_ITERATIONS) -> bytes:
-    """
-    Deriva una clave segura desde la contraseña usando PBKDF2-HMAC-SHA256.
-    Devuelve bytes (el hash).
-    """
-    if not isinstance(password, str):
-        raise TypeError("password debe ser str")
-    return hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations, dklen=HASH_LEN)
+# Vulnerabilidad 6: Server-Side Template Injection (SSTI)
+@app.route('/saludo')
+def saludo():
+    nombre = request.args.get('nombre', 'Invitado')
+    # Renderizado inseguro de templates
+    template = f"<h1>Hola {nombre}!</h1>"
+    return render_template_string(template)
 
+# Vulnerabilidad 7: Hardcoded Credentials
+def conectar_db():
+    usuario = "admin"
+    password = "admin123"
+    host = "192.168.1.100"
+    return f"mysql://{usuario}:{password}@{host}/midb"
 
-def verify_password(password: str, salt: bytes, expected_hash: bytes, iterations: int = PBKDF2_ITERATIONS) -> bool:
-    """Verifica la contraseña usando comparación en tiempo constante."""
-    candidate = hash_password(password, salt, iterations)
-    return hmac.compare_digest(candidate, expected_hash)
+# Vulnerabilidad 8: Weak Cryptography
+def cifrar_password(password):
+    # MD5 es inseguro para passwords
+    import hashlib
+    return hashlib.md5(password.encode()).hexdigest()
 
+# Vulnerabilidad 9: Information Disclosure
+@app.route('/error')
+def error_handler():
+    try:
+        resultado = 1 / 0
+    except Exception as e:
+        # Exposición de información sensible en errores
+        return f"Error: {str(e)}, Stack: {e.__traceback__}"
 
-# ---------- Validaciones ----------
+# Vulnerabilidad 10: Missing Authentication
+@app.route('/admin/delete_user')
+def delete_user():
+    user_id = request.args.get('id')
+    # No hay verificación de autenticación
+    conn = sqlite3.connect('usuarios.db')
+    cursor = conn.cursor()
+    cursor.execute(f"DELETE FROM usuarios WHERE id = {user_id}")
+    conn.commit()
+    conn.close()
+    return "Usuario eliminado"
 
-USERNAME_RE = re.compile(r"^[A-Za-z0-9._-]{3,30}$")  # permitir solo caracteres seguros, longitud razonable
-MIN_PASSWORD_LEN = 8
-
-
-def validate_username(username: str) -> None:
-    if not USERNAME_RE.match(username):
-        raise ValueError("Usuario inválido. Solo letras, números, ., _ y -; longitud 3-30.")
-
-
-def validate_password(password: str) -> None:
-    if len(password) < MIN_PASSWORD_LEN:
-        raise ValueError(f"Contraseña muy corta. Mínimo {MIN_PASSWORD_LEN} caracteres.")
-
-
-# ---------- Base de datos ----------
-
-def get_connection(path: str =
+if __name__ == '__main__':
+    # Vulnerabilidad 11: Debug mode en producción
+    app.run(debug=True, host='0.0.0.0', port=5000)
