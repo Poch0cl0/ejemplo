@@ -1,13 +1,12 @@
 import os
 import sqlite3
-import shlex
-import subprocess
 
 def login(username, password):
-    # ✅ Consulta segura con parámetros
+    # ❌ Vulnerabilidad: SQL Injection
+    query = f"SELECT * FROM users WHERE username='{username}' AND password='{password}'"
     conn = sqlite3.connect("app.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+    cursor.execute(query)
     user = cursor.fetchone()
     conn.close()
 
@@ -17,14 +16,9 @@ def login(username, password):
         print("Credenciales inválidas.")
 
 def run_command():
-    # ✅ Validación y ejecución segura del comando
-    cmd = input("Ingresa un comando permitido (ls, whoami, date): ").strip()
-    allowed_cmds = {"ls", "whoami", "date"}
-    if cmd in allowed_cmds:
-        # Separa los argumentos y ejecuta sin shell
-        subprocess.run(shlex.split(cmd), check=True)
-    else:
-        print("Comando no permitido.")
+    # ❌ Vulnerabilidad: ejecución de comandos sin validación
+    cmd = input("Ingresa un comando del sistema: ")
+    os.system(cmd)  # puede ejecutar cualquier comando arbitrario
 
 if __name__ == "__main__":
     u = input("Usuario: ")
